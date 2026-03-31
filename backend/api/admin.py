@@ -72,13 +72,14 @@ async def admin_dashboard(db: AsyncSession = Depends(get_db)):
     t = totals.one()
 
     # Growth chart (последние 30 дней)
+    from sqlalchemy import cast, Date
     from models.chat import Chat as ChatModel
     growth = []
     for i in range(29, -1, -1):
         d = (now - timedelta(days=i)).date()
         cnt = await db.scalar(
             select(func.count(Chat.id)).where(
-                func.date(Chat.connected_at) == d
+                cast(Chat.connected_at, Date) == d
             )
         )
         growth.append({"date": str(d), "new_chats": cnt or 0})
