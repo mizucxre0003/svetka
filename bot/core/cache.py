@@ -34,20 +34,41 @@ async def get_redis() -> aioredis.Redis:
 
 
 async def get_chat_settings_cached(chat_id: int, backend_client) -> dict | None:
-    r = await get_redis()
-    key = f"chat_settings:{chat_id}"
-    cached = await r.get(key)
-    if cached:
-        return json.loads(cached)
-    data = await backend_client.get_settings(chat_id)
-    if data:
-        await r.setex(key, SETTINGS_TTL, json.dumps(data))
-    return data
+    global _redis
+    for attempt in range(2):
+        try:
+            r = await get_redis()
+            key = f"chat_settings:{chat_id}"
+            cached = await r.get(key)
+            if cached:
+                return json.loads(cached)
+            data = await backend_client.get_settings(chat_id)
+            if data:
+                await r.setex(key, SETTINGS_TTL, json.dumps(data))
+            return data
+        except (ConnectionError, TimeoutError) as e:
+            if attempt == 0:
+                if _redis:
+                    await _redis.aclose()
+                    _redis = None
+            else:
+                return await backend_client.get_settings(chat_id)  # Fallback to backend without caching if redis fails
 
 
 async def invalidate_chat_settings(chat_id: int):
-    r = await get_redis()
-    await r.delete(f"chat_settings:{chat_id}")
+    global _redis
+    for attempt in range(2):
+        try:
+            r = await get_redis()
+            await r.delete(f"chat_settings:{chat_id}")
+            break
+        except (ConnectionError, TimeoutError) as e:
+            if attempt == 0:
+                if _redis:
+                    await _redis.aclose()
+                    _redis = None
+            else:
+                break
 
 
 async def close_redis():
