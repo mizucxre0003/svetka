@@ -36,12 +36,33 @@ async def check_admin(message: Message) -> bool:
         return False
 
 
-def get_target(message: Message) -> tuple[int | None, str]:
-    """Получить цель команды (reply или @username)."""
-    if message.reply_to_message and message.reply_to_message.from_user:
-        u = message.reply_to_message.from_user
-        return u.id, u.mention_html()
-    return None, ""
+async def get_target(message: Message) -> tuple[int | None, str, str | None]:
+    """
+    Получить цель команды.
+    Возращает: (target_id, mention_html, error_message)
+    """
+    if message.reply_to_message:
+        if message.reply_to_message.from_user:
+            u = message.reply_to_message.from_user
+            return u.id, u.mention_html(), None
+        elif message.reply_to_message.sender_chat:
+            return None, "", "❌ Невозможно применить к каналу или анонимной группе."
+
+    if message.entities:
+        for ent in message.entities:
+            if ent.type == "text_mention" and ent.user:
+                return ent.user.id, ent.user.mention_html(), None
+
+    args = message.text.split() if message.text else []
+    if len(args) > 1:
+        # Проверяем, не передан ли ID напрямую
+        if args[1].isdigit():
+            return int(args[1]), f'<a href="tg://user?id={args[1]}">Пользователь</a>', None
+        # Если это @username
+        elif args[1].startswith("@"):
+            return None, "", "❌ Бот не может мутить по @username без ответа на сообщение. Пожалуйста, ответьте на сообщение (Reply) пользователя, либо укажите его цифровой ID."
+
+    return None, "", "❌ Ответьте на сообщение пользователя или укажите его ID."
 
 
 @router.message(Command("ban"))
@@ -49,9 +70,9 @@ async def cmd_ban(message: Message, chat_db: dict | None = None):
     if not await check_admin(message):
         return
 
-    target_id, mention = get_target(message)
+    target_id, mention, err = await get_target(message)
     if not target_id:
-        await message.reply("❌ Ответьте на сообщение пользователя, которого хотите забанить.")
+        await message.reply(err or "❌ Цель не найдена.")
         return
 
     # Нельзя банить ботов/админов
@@ -106,9 +127,9 @@ async def cmd_mute(message: Message, chat_db: dict | None = None):
     if not await check_admin(message):
         return
 
-    target_id, mention = get_target(message)
+    target_id, mention, err = await get_target(message)
     if not target_id:
-        await message.reply("❌ Ответьте на сообщение пользователя.")
+        await message.reply(err or "❌ Цель не найдена.")
         return
 
     args = message.text.split() if message.text else []
@@ -169,9 +190,9 @@ async def cmd_unmute(message: Message, chat_db: dict | None = None):
     if not await check_admin(message):
         return
 
-    target_id, mention = get_target(message)
+    target_id, mention, err = await get_target(message)
     if not target_id:
-        await message.reply("❌ Ответьте на сообщение пользователя.")
+        await message.reply(err or "❌ Цель не найдена.")
         return
 
     try:
@@ -211,9 +232,9 @@ async def cmd_warn(message: Message, chat_db: dict | None = None):
     if not await check_admin(message):
         return
 
-    target_id, mention = get_target(message)
+    target_id, mention, err = await get_target(message)
     if not target_id:
-        await message.reply("❌ Ответьте на сообщение пользователя.")
+        await message.reply(err or "❌ Цель не найдена.")
         return
 
     args = message.text.split() if message.text else []
@@ -298,9 +319,9 @@ async def cmd_unwarn(message: Message, chat_db: dict | None = None):
     if not await check_admin(message):
         return
 
-    target_id, mention = get_target(message)
+    target_id, mention, err = await get_target(message)
     if not target_id or not chat_db:
-        await message.reply("❌ Ответьте на сообщение пользователя.")
+        await message.reply(err or "❌ Цель не найдена.")
         return
 
     warns = await backend.get_warns(chat_db["id"], target_id)
