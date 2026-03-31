@@ -1,0 +1,33 @@
+.env
+*.pyc
+__pycache__/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Next.js
+node_modules/
+.next/
+out/
+.turbo/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Alembic
+alembic.ini.local

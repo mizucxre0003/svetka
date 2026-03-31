@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Node modules
+node_modules
+*/node_modules
+**/.next/cache
+
+# Python cache
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+*.egg-info
+
+# Build artifacts (перестраиваем в Docker)
+**/.next
+**/out
+**/build
+**/.nuxt
+
+# Dev files
+*.env
+*.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+
+# Docs / местные файлы
+README.md
+Svetka_MVP_v1.md
+schema.sql
+docker-compose.yml
+deploy/
+
+# IDE
+.vscode
+.idea
