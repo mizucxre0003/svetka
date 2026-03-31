@@ -14,13 +14,11 @@ settings = get_settings()
 
 
 def pm_redirect_keyboard(chat_id: int) -> InlineKeyboardMarkup:
-    """Кнопка открытия Mini App через Direct Link (настраивается в BotFather)."""
+    """Кнопка открытия Main Mini App через Direct Link."""
     bot_username = "Svetkatg_bot"
-    app_short_name = "app"  # Имя (short name), которое вы зададите в BotFather (например, 'app')
     
-    # Ссылка вида https://t.me/Bot/app?startapp=chat_id
-    # Telegram автоматически откроет Mini App поверх группы
-    tma_direct_url = f"https://t.me/{bot_username}/{app_short_name}?startapp={chat_id}"
+    # Ссылка вида https://t.me/Bot?startapp=chat_id (для Главного Mini App)
+    tma_direct_url = f"https://t.me/{bot_username}?startapp={chat_id}"
     
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="⚙️ Открыть настройки", url=tma_direct_url)
