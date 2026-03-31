@@ -15,10 +15,9 @@ settings = get_settings()
 
 def mini_app_keyboard(chat_id: int) -> InlineKeyboardMarkup:
     """Кнопка открытия Mini App."""
-    base_url = settings.BOT_WEBHOOK_URL.replace('/webhook', '') if settings.BOT_WEBHOOK_URL else "https://xenial-jonie-seabluu-4d610c7f.koyeb.app"
-    mini_app_url = f"{base_url}/mini-app?chat_id={chat_id}"
+    mini_app_url = f"{settings.BOT_WEBHOOK_URL.replace('/webhook', '')}/mini-app?chat_id={chat_id}"
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="⚙️ Открыть настройки", web_app={"url": mini_app_url})
+        InlineKeyboardButton(text="⚙️ Открыть настройки", url=mini_app_url)
     ]])
 
 
@@ -136,12 +135,11 @@ async def cmd_stats(message: Message, chat_db: dict | None = None):
 @router.message(Command("settings"))
 async def cmd_settings(message: Message, chat_db: dict | None = None):
     if message.chat.type == "private":
-        tma_url = settings.BOT_WEBHOOK_URL.replace('/webhook', '') if settings.BOT_WEBHOOK_URL else "https://xenial-jonie-seabluu-4d610c7f.koyeb.app"
         await message.answer(
             "⚙️ <b>Настройки Svetka</b>\n\n"
             "Откройте Mini App для управления вашими группами:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="⚙️ Открыть Mini App", web_app={"url": tma_url})
+                InlineKeyboardButton(text="⚙️ Открыть Mini App", web_app={"url": "https://example.com"})
             ]]),
             parse_mode="HTML",
         )
@@ -153,7 +151,6 @@ async def cmd_settings(message: Message, chat_db: dict | None = None):
 
     await message.answer(
         "⚙️ <b>Управление группой</b>\n\nОткройте Mini App для полного управления настройками:",
-        reply_markup=mini_app_keyboard(chat_db["id"]),
         parse_mode="HTML",
     )
     await backend.increment_metric(chat_db["id"], "mini_app_opens_count")

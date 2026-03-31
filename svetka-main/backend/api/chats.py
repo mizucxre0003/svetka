@@ -59,15 +59,6 @@ async def get_chat(chat_id: int, db: AsyncSession = Depends(get_db)):
     return chat
 
 
-@router.get("/by_tg_id/{telegram_chat_id}", response_model=ChatOut)
-async def get_chat_by_tg_id(telegram_chat_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Chat).where(Chat.telegram_chat_id == telegram_chat_id))
-    chat = result.scalar_one_or_none()
-    if not chat:
-        raise HTTPException(status_code=404, detail="Chat not found")
-    return chat
-
-
 @router.post("/register", response_model=ChatOut, status_code=status.HTTP_201_CREATED)
 async def register_chat(
     data: ChatCreate,

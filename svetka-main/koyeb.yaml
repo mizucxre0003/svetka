@@ -1,0 +1,31 @@
+name: svetka
+
+services:
+  - name: app
+    git:
+      branch: main
+    docker:
+      dockerfile: Dockerfile
+    ports:
+      - port: 8080
+        protocol: http
+    checks:
+      - type: http
+        port: 8080
+        path: /health
+        interval: 10s
+        timeout: 5s
+        healthy_threshold: 1
+        unhealthy_threshold: 3
+    env:
+      - key: DATABASE_URL
+        secret: DATABASE_URL
+      - key: REDIS_URL
+        secret: REDIS_URL
+      - key: ADMIN_TOKEN
+        secret: ADMIN_TOKEN
+      - key: BOT_TOKEN
+        secret: BOT_TOKEN
+    regions:
+      - fra
+    instance_type: nano

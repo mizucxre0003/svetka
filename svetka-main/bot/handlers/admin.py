@@ -1,0 +1,328 @@
+"""
+Модерационные команды: /ban, /mute, /unmute, /warn, /unwarn
+Только для администраторов с соответствующими правами.
+"""
+import time
+import re
+from aiogram import Router
+from aiogram.filters import Command
+from aiogram.types import Message
+from core.backend import backend
+from core.cache import get_chat_settings_cached
+from loguru import logger
+
+router = Router()
+
+
+def parse_duration(text: str | None) -> int | None:
+    """Парсит '1h', '30m', '1d' в секунды. None = permanent."""
+    if not text:
+        return None
+    match = re.match(r"^(\d+)([smhd])$", text.lower())
+    if not match:
+        return None
+    val, unit = int(match.group(1)), match.group(2)
+    return {"s": val, "m": val * 60, "h": val * 3600, "d": val * 86400}[unit]
+
+
+async def check_admin(message: Message) -> bool:
+    """Проверка, является ли отправитель администратором."""
+    if message.chat.type not in ("group", "supergroup"):
+        return False
+    try:
+        member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
+        return member.status in ("administrator", "creator")
+    except Exception:
+        return False
+
+
+def get_target(message: Message) -> tuple[int | None, str]:
+    """Получить цель команды (reply или @username)."""
+    if message.reply_to_message and message.reply_to_message.from_user:
+        u = message.reply_to_message.from_user
+        return u.id, u.mention_html()
+    return None, ""
+
+
+@router.message(Command("ban"))
+async def cmd_ban(message: Message, chat_db: dict | None = None):
+    if not await check_admin(message):
+        return
+
+    target_id, mention = get_target(message)
+    if not target_id:
+        await message.reply("❌ Ответьте на сообщение пользователя, которого хотите забанить.")
+        return
+
+    # Нельзя банить ботов/админов
+    try:
+        target_member = await message.bot.get_chat_member(message.chat.id, target_id)
+        if target_member.status in ("administrator", "creator"):
+            await message.reply("❌ Нельзя забанить администратора.")
+            return
+    except Exception:
+        pass
+
+    args = message.text.split() if message.text else []
+    reason = " ".join(args[1:]) if len(args) > 1 else None
+
+    try:
+        await message.bot.ban_chat_member(chat_id=message.chat.id, user_id=target_id)
+    except Exception as e:
+        await message.reply(f"❌ Не удалось забанить: {e}")
+        return
+
+    if chat_db:
+        await backend.punish(
+            chat_id=chat_db["id"],
+            telegram_user_id=target_id,
+            issued_by=message.from_user.id,
+            ptype="ban",
+            reason=reason,
+        )
+        await backend.log_event(
+            chat_id=chat_db["id"],
+            action_type="ban",
+            actor_tg_id=message.from_user.id,
+            target_tg_id=target_id,
+            payload={"reason": reason},
+        )
+        await backend.increment_metric(chat_db["id"], "bans_count")
+        await backend.increment_metric(chat_db["id"], "moderation_actions_count")
+
+    reason_text = f"\n📝 Причина: {reason}" if reason else ""
+    await message.reply(
+        f"🔨 {mention} был забанен.{reason_text}",
+        parse_mode="HTML",
+    )
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.message(Command("mute"))
+async def cmd_mute(message: Message, chat_db: dict | None = None):
+    if not await check_admin(message):
+        return
+
+    target_id, mention = get_target(message)
+    if not target_id:
+        await message.reply("❌ Ответьте на сообщение пользователя.")
+        return
+
+    args = message.text.split() if message.text else []
+    duration_str = args[1] if len(args) > 1 else None
+    reason = " ".join(args[2:]) if len(args) > 2 else None
+
+    duration = parse_duration(duration_str)
+    if duration_str and not duration:
+        reason = " ".join(args[1:])
+        duration = 3600  # default 1h
+
+    until = int(time.time()) + (duration or 3600)
+
+    try:
+        await message.bot.restrict_chat_member(
+            chat_id=message.chat.id,
+            user_id=target_id,
+            permissions={"can_send_messages": False},
+            until_date=until,
+        )
+    except Exception as e:
+        await message.reply(f"❌ Не удалось замутить: {e}")
+        return
+
+    if chat_db:
+        await backend.punish(
+            chat_id=chat_db["id"],
+            telegram_user_id=target_id,
+            issued_by=message.from_user.id,
+            ptype="mute",
+            reason=reason,
+            duration=duration or 3600,
+        )
+        await backend.log_event(
+            chat_id=chat_db["id"],
+            action_type="mute",
+            actor_tg_id=message.from_user.id,
+            target_tg_id=target_id,
+            payload={"duration": duration, "reason": reason},
+        )
+        await backend.increment_metric(chat_db["id"], "mutes_count")
+        await backend.increment_metric(chat_db["id"], "moderation_actions_count")
+
+    duration_text = f" на {duration_str}" if duration_str else " на 1 час"
+    reason_text = f"\n📝 Причина: {reason}" if reason else ""
+    await message.reply(
+        f"🔇 {mention} замучен{duration_text}.{reason_text}",
+        parse_mode="HTML",
+    )
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.message(Command("unmute"))
+async def cmd_unmute(message: Message, chat_db: dict | None = None):
+    if not await check_admin(message):
+        return
+
+    target_id, mention = get_target(message)
+    if not target_id:
+        await message.reply("❌ Ответьте на сообщение пользователя.")
+        return
+
+    try:
+        await message.bot.restrict_chat_member(
+            chat_id=message.chat.id,
+            user_id=target_id,
+            permissions={
+                "can_send_messages": True,
+                "can_send_media_messages": True,
+                "can_send_polls": True,
+                "can_send_other_messages": True,
+                "can_add_web_page_previews": True,
+            },
+        )
+    except Exception as e:
+        await message.reply(f"❌ Не удалось снять мут: {e}")
+        return
+
+    if chat_db:
+        await backend.log_event(
+            chat_id=chat_db["id"],
+            action_type="unmute",
+            actor_tg_id=message.from_user.id,
+            target_tg_id=target_id,
+        )
+        await backend.increment_metric(chat_db["id"], "moderation_actions_count")
+
+    await message.reply(f"🔊 {mention} размучен.", parse_mode="HTML")
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.message(Command("warn"))
+async def cmd_warn(message: Message, chat_db: dict | None = None):
+    if not await check_admin(message):
+        return
+
+    target_id, mention = get_target(message)
+    if not target_id:
+        await message.reply("❌ Ответьте на сообщение пользователя.")
+        return
+
+    args = message.text.split() if message.text else []
+    reason = " ".join(args[1:]) if len(args) > 1 else None
+
+    if not chat_db:
+        await message.reply("❌ Чат не зарегистрирован.")
+        return
+
+    cs = await get_chat_settings_cached(chat_db["id"], backend)
+    warn_limit = cs.get("default_warn_limit", 3) if cs else 3
+
+    await backend.warn(
+        chat_id=chat_db["id"],
+        telegram_user_id=target_id,
+        issued_by=message.from_user.id,
+        reason=reason,
+    )
+
+    warns = await backend.get_warns(chat_db["id"], target_id)
+    count = warns["count"]
+
+    reason_text = f"\n📝 Причина: {reason}" if reason else ""
+    await message.reply(
+        f"⚠️ {mention} получает предупреждение {count}/{warn_limit}.{reason_text}",
+        parse_mode="HTML",
+    )
+
+    await backend.log_event(
+        chat_id=chat_db["id"],
+        action_type="warn",
+        actor_tg_id=message.from_user.id,
+        target_tg_id=target_id,
+        payload={"count": count, "limit": warn_limit, "reason": reason},
+    )
+    await backend.increment_metric(chat_db["id"], "warnings_count")
+    await backend.increment_metric(chat_db["id"], "moderation_actions_count")
+
+    # Автонаказание при достижении лимита
+    if count >= warn_limit and cs:
+        action = cs.get("warn_limit_action", "mute")
+        duration = cs.get("default_mute_duration", 3600)
+        if action == "ban":
+            try:
+                await message.bot.ban_chat_member(chat_id=message.chat.id, user_id=target_id)
+                await backend.punish(chat_db["id"], target_id, message.from_user.id,
+                                     "ban", "warn_limit_reached")
+                await backend.increment_metric(chat_db["id"], "bans_count")
+                await message.answer(
+                    f"🔨 {mention}: достигнут лимит предупреждений. Бан.",
+                    parse_mode="HTML",
+                )
+            except Exception as e:
+                logger.warning(f"Auto-ban failed: {e}")
+        else:
+            until = int(time.time()) + duration
+            try:
+                await message.bot.restrict_chat_member(
+                    chat_id=message.chat.id,
+                    user_id=target_id,
+                    permissions={"can_send_messages": False},
+                    until_date=until,
+                )
+                await backend.punish(chat_db["id"], target_id, message.from_user.id,
+                                     "mute", "warn_limit_reached", duration)
+                await backend.increment_metric(chat_db["id"], "mutes_count")
+                await message.answer(
+                    f"🔇 {mention}: достигнут лимит предупреждений. Мут.",
+                    parse_mode="HTML",
+                )
+            except Exception as e:
+                logger.warning(f"Auto-mute failed: {e}")
+
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+@router.message(Command("unwarn"))
+async def cmd_unwarn(message: Message, chat_db: dict | None = None):
+    if not await check_admin(message):
+        return
+
+    target_id, mention = get_target(message)
+    if not target_id or not chat_db:
+        await message.reply("❌ Ответьте на сообщение пользователя.")
+        return
+
+    warns = await backend.get_warns(chat_db["id"], target_id)
+    if warns["count"] == 0:
+        await message.reply(f"ℹ️ У {mention} нет активных предупреждений.", parse_mode="HTML")
+        return
+
+    # Снимаем последнее предупреждение
+    last_warn = warns["warnings"][-1]
+    await backend.revoke_warn(last_warn["id"])
+
+    await message.reply(
+        f"✅ Предупреждение снято с {mention}. Осталось: {warns['count'] - 1}.",
+        parse_mode="HTML",
+    )
+    await backend.log_event(
+        chat_id=chat_db["id"],
+        action_type="unwarn",
+        actor_tg_id=message.from_user.id,
+        target_tg_id=target_id,
+    )
+    try:
+        await message.delete()
+    except Exception:
+        pass

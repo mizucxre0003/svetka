@@ -41,7 +41,7 @@ class BackendClient:
     async def get_chat_by_tg_id(self, telegram_chat_id: int) -> dict | None:
         try:
             c = await self.get_client()
-            r = await c.get(f"/api/v1/chats/by_tg_id/{telegram_chat_id}")
+            r = await c.get(f"/api/v1/chats/", params={"telegram_chat_id": telegram_chat_id})
             return r.json() if r.is_success else None
         except Exception as e:
             logger.error(f"get_chat error: {e}")
