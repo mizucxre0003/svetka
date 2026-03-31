@@ -32,8 +32,8 @@ class Chat(Base):
     connected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     last_activity_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     member_count: Mapped[int] = mapped_column(Integer, default=0)
-    tariff: Mapped[TariffPlan] = mapped_column(SAEnum(TariffPlan), default=TariffPlan.free)
-    status: Mapped[ChatStatus] = mapped_column(SAEnum(ChatStatus), default=ChatStatus.active)
+    tariff: Mapped[TariffPlan] = mapped_column(SAEnum(TariffPlan, native_enum=False, length=20), default=TariffPlan.free)
+    status: Mapped[ChatStatus] = mapped_column(SAEnum(ChatStatus, native_enum=False, length=20), default=ChatStatus.active)
 
     # Relationships
     settings: Mapped["ChatSettings"] = relationship("ChatSettings", back_populates="chat", uselist=False, lazy="selectin")
@@ -56,7 +56,7 @@ class ChatMember(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     chat_id: Mapped[int] = mapped_column(Integer, ForeignKey("chats.id"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    role: Mapped[ChatMemberRole] = mapped_column(SAEnum(ChatMemberRole), default=ChatMemberRole.member)
+    role: Mapped[ChatMemberRole] = mapped_column(SAEnum(ChatMemberRole, native_enum=False, length=20), default=ChatMemberRole.member)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     granted_by_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 

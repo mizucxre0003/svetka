@@ -22,8 +22,8 @@ class Subscription(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     chat_id: Mapped[int] = mapped_column(Integer, ForeignKey("chats.id"), nullable=False, unique=True)
-    plan: Mapped[SubscriptionPlan] = mapped_column(SAEnum(SubscriptionPlan), default=SubscriptionPlan.free)
-    status: Mapped[SubscriptionStatus] = mapped_column(SAEnum(SubscriptionStatus), default=SubscriptionStatus.active)
+    plan: Mapped[SubscriptionPlan] = mapped_column(SAEnum(SubscriptionPlan, native_enum=False, length=20), default=SubscriptionPlan.free)
+    status: Mapped[SubscriptionStatus] = mapped_column(SAEnum(SubscriptionStatus, native_enum=False, length=20), default=SubscriptionStatus.active)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_trial: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -24,11 +24,11 @@ class Punishment(Base):
     chat_id: Mapped[int] = mapped_column(Integer, ForeignKey("chats.id"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     issued_by_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    type: Mapped[PunishmentType] = mapped_column(SAEnum(PunishmentType), nullable=False)
+    type: Mapped[PunishmentType] = mapped_column(SAEnum(PunishmentType, native_enum=False, length=20), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    status: Mapped[PunishmentStatus] = mapped_column(SAEnum(PunishmentStatus), default=PunishmentStatus.active)
+    status: Mapped[PunishmentStatus] = mapped_column(SAEnum(PunishmentStatus, native_enum=False, length=20), default=PunishmentStatus.active)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     issued_by: Mapped["User"] = relationship("User", foreign_keys=[issued_by_user_id])

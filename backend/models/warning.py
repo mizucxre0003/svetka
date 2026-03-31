@@ -19,7 +19,7 @@ class Warning(Base):
     issued_by_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    status: Mapped[WarningStatus] = mapped_column(SAEnum(WarningStatus), default=WarningStatus.active)
+    status: Mapped[WarningStatus] = mapped_column(SAEnum(WarningStatus, native_enum=False, length=20), default=WarningStatus.active)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     issued_by: Mapped["User"] = relationship("User", foreign_keys=[issued_by_user_id])
