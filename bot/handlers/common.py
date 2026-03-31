@@ -13,18 +13,42 @@ router = Router()
 settings = get_settings()
 
 
-def mini_app_keyboard(chat_id: int) -> InlineKeyboardMarkup:
-    """Кнопка открытия Mini App."""
-    base_url = settings.BOT_WEBHOOK_URL.replace('/webhook', '') if settings.BOT_WEBHOOK_URL else "https://xenial-jonie-seabluu-4d610c7f.koyeb.app"
-    mini_app_url = f"{base_url}/mini-app?chat_id={chat_id}"
+def pm_redirect_keyboard(chat_id: int) -> InlineKeyboardMarkup:
+    """Кнопка открытия Mini App через Direct Link (настраивается в BotFather)."""
+    bot_username = "Svetkatg_bot"
+    app_short_name = "app"  # Имя (short name), которое вы зададите в BotFather (например, 'app')
+    
+    # Ссылка вида https://t.me/Bot/app?startapp=chat_id
+    # Telegram автоматически откроет Mini App поверх группы
+    tma_direct_url = f"https://t.me/{bot_username}/{app_short_name}?startapp={chat_id}"
+    
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="⚙️ Открыть настройки", web_app={"url": mini_app_url})
+        InlineKeyboardButton(text="⚙️ Открыть настройки", url=tma_direct_url)
     ]])
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     if message.chat.type == "private":
+        # Обработка диплинка из группы (/start settings_-100123...)
+        parts = message.text.split(maxsplit=1)
+        if len(parts) > 1 and parts[1].startswith("settings_"):
+            chat_id_str = parts[1].replace("settings_", "")
+            try:
+                chat_id = int(chat_id_str)
+                tma_url = settings.BOT_WEBHOOK_URL.replace('/webhook', '') if settings.BOT_WEBHOOK_URL else "https://xenial-jonie-seabluu-4d610c7f.koyeb.app"
+                mini_app_url = f"{tma_url}/mini-app?chat_id={chat_id}"
+                await message.answer(
+                    f"⚙️ <b>Настройки чата</b>\n\nУправляйте группой через Mini App:",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                        InlineKeyboardButton(text="⚙️ Открыть Mini App", web_app={"url": mini_app_url})
+                    ]]),
+                    parse_mode="HTML",
+                )
+                return
+            except ValueError:
+                pass
+
         await message.answer(
             "👋 <b>Добрый день! Я Svetka.</b>\n\n"
             "Я — современный менеджер Telegram-сообществ.\n\n"
@@ -152,8 +176,8 @@ async def cmd_settings(message: Message, chat_db: dict | None = None):
         return
 
     await message.answer(
-        "⚙️ <b>Управление группой</b>\n\nОткройте Mini App для полного управления настройками:",
-        reply_markup=mini_app_keyboard(chat_db["id"]),
+        "⚙️ <b>Управление группой</b>\n\nОткройте Mini App для настройки параметров беседды:",
+        reply_markup=pm_redirect_keyboard(chat_db["id"]),
         parse_mode="HTML",
     )
     await backend.increment_metric(chat_db["id"], "mini_app_opens_count")
