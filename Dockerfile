@@ -50,12 +50,12 @@ COPY bot/ ./
 # ── Admin Panel (Next.js standalone) ─────────────────────
 COPY --from=admin-builder /build/.next/standalone /app/admin
 COPY --from=admin-builder /build/.next/static     /app/admin/.next/static
-COPY --from=admin-builder /build/public           /app/admin/public
+RUN mkdir -p /app/admin/public
 
 # ── Mini App (Next.js standalone) ────────────────────────
 COPY --from=mini-builder /build/.next/standalone /app/mini
 COPY --from=mini-builder /build/.next/static     /app/mini/.next/static
-COPY --from=mini-builder /build/public           /app/mini/public
+RUN mkdir -p /app/mini/public
 
 # ── nginx ─────────────────────────────────────────────────
 COPY deploy/nginx.conf /etc/nginx/nginx.conf
