@@ -66,4 +66,4 @@ COPY deploy/supervisord.conf /etc/supervisor/conf.d/svetka.conf
 # Koyeb слушает один порт
 EXPOSE 8080
 
-CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
+CMD bash -c "cd /app/backend && alembic upgrade head && exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf"
