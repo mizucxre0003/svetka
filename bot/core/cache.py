@@ -6,6 +6,9 @@ Redis-based cache для настроек чатов.
 import json
 from core.config import get_settings
 import redis.asyncio as aioredis
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry
+from redis.exceptions import ConnectionError, TimeoutError
 
 settings = get_settings()
 
@@ -23,7 +26,9 @@ async def get_redis() -> aioredis.Redis:
             decode_responses=True,
             health_check_interval=10,
             socket_keepalive=True,
-            retry_on_timeout=True
+            retry_on_timeout=True,
+            retry=Retry(ExponentialBackoff(cap=10, base=1), 3),
+            retry_on_error=[ConnectionError, TimeoutError]
         )
     return _redis
 
