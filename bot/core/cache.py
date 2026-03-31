@@ -17,7 +17,14 @@ SETTINGS_TTL = 60  # секунд
 async def get_redis() -> aioredis.Redis:
     global _redis
     if _redis is None:
-        _redis = aioredis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+        _redis = aioredis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+            health_check_interval=10,
+            socket_keepalive=True,
+            retry_on_timeout=True
+        )
     return _redis
 
 
