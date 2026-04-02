@@ -18,8 +18,9 @@ from middlewares.chat_context import ChatContextMiddleware
 from middlewares.anti_flood import AntiFloodMiddleware
 from middlewares.soft_mute import SoftMuteMiddleware
 
-from handlers import system, common, admin, triggers
-from filters.protection import router as protection_router
+from handlers import system, common, admin 
+from filters.protection import ProtectionMiddleware
+from handlers.triggers import TriggersMiddleware
 
 settings = get_settings()
 
@@ -50,13 +51,13 @@ async def main():
     dp.message.middleware(ChatContextMiddleware())
     dp.message.middleware(SoftMuteMiddleware())
     dp.message.middleware(AntiFloodMiddleware())
+    dp.message.middleware(ProtectionMiddleware())
+    dp.message.middleware(TriggersMiddleware())
 
     # Роутеры
     dp.include_router(system.router)
     dp.include_router(common.router)
     dp.include_router(admin.router)
-    dp.include_router(protection_router)
-    dp.include_router(triggers.router)
 
     # Установить команды бота
     await set_bot_commands(bot)

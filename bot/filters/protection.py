@@ -7,13 +7,12 @@
 """
 import re
 import time
-from aiogram import Router, F
-from aiogram.types import Message
+from aiogram import BaseMiddleware
+from aiogram.types import Message, TelegramObject
+from typing import Callable, Any, Awaitable
 from core.cache import get_chat_settings_cached, get_redis
 from core.backend import backend
 from loguru import logger
-
-router = Router()
 
 URL_PATTERN = re.compile(
     r"(https?://|t\.me/|@\w+|www\.|bit\.ly|tinyurl|vk\.com|instagram\.com|youtube\.com)",
@@ -100,50 +99,61 @@ async def _auto_punish(message: Message, chat_db: dict, settings: dict):
     )
 
 
-@router.message(F.chat.type.in_({"group", "supergroup"}))
-async def protection_handler(message: Message, chat_db: dict | None = None):
-    if not chat_db or not message.from_user or message.from_user.is_bot:
-        return
+class ProtectionMiddleware(BaseMiddleware):
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: Message,
+        data: dict[str, Any],
+    ) -> Any:
+        if not isinstance(event, Message):
+            return await handler(event, data)
 
-    settings = await get_chat_settings_cached(chat_db["id"], backend)
-    if not settings:
-        return
+        chat_db = data.get("chat_db")
+        if not chat_db or event.chat.type not in ("group", "supergroup") or not event.from_user or event.from_user.is_bot:
+            return await handler(event, data)
 
-    text = message.text or message.caption or ""
+        settings = await get_chat_settings_cached(chat_db["id"], backend)
+        if not settings:
+            return await handler(event, data)
 
-    # ── Антиссылки ──────────────────────────────────────────────────────────
-    if settings.get("anti_links_enabled") and URL_PATTERN.search(text):
-        action = settings.get("anti_links_action", "delete")
-        await apply_protection_action(message, action, chat_db, settings, "anti_links")
-        return
+        text = event.text or event.caption or ""
 
-    # ── Стоп-слова ──────────────────────────────────────────────────────────
-    if settings.get("stop_words_enabled"):
-        stop_words = settings.get("stop_words_list") or []
-        text_lower = text.lower()
-        for word in stop_words:
-            if word.lower() in text_lower:
-                action = settings.get("stop_words_action", "delete")
-                await apply_protection_action(message, action, chat_db, settings, "stop_word")
-                return
-
-    # ── Фильтр капса ────────────────────────────────────────────────────────
-    if settings.get("caps_filter_enabled") and text:
-        min_len = settings.get("caps_filter_min_length", 10)
-        threshold = settings.get("caps_filter_threshold", 0.7)
-        if len(text) >= min_len:
-            upper_count = sum(1 for c in text if c.isupper())
-            alpha_count = sum(1 for c in text if c.isalpha())
-            if alpha_count > 0 and upper_count / alpha_count >= threshold:
-                await apply_protection_action(message, "delete", chat_db, settings, "caps_filter")
-                return
-
-    # ── Фильтр повторов ─────────────────────────────────────────────────────
-    if settings.get("repeat_filter_enabled") and text:
-        r = await get_redis()
-        key = f"repeat:{message.chat.id}:{message.from_user.id}"
-        prev = await r.get(key)
-        await r.setex(key, 300, text[:200])
-        if prev and prev == text[:200]:
-            await apply_protection_action(message, "delete", chat_db, settings, "repeat_filter")
+        # ── Антиссылки ──────────────────────────────────────────────────────────
+        if settings.get("anti_links_enabled") and URL_PATTERN.search(text):
+            action = settings.get("anti_links_action", "delete")
+            await apply_protection_action(event, action, chat_db, settings, "anti_links")
             return
+
+        # ── Стоп-слова ──────────────────────────────────────────────────────────
+        if settings.get("stop_words_enabled"):
+            stop_words = settings.get("stop_words_list") or []
+            text_lower = text.lower()
+            for word in stop_words:
+                if word.lower() in text_lower:
+                    action = settings.get("stop_words_action", "delete")
+                    await apply_protection_action(event, action, chat_db, settings, "stop_word")
+                    return
+
+        # ── Фильтр капса ────────────────────────────────────────────────────────
+        if settings.get("caps_filter_enabled") and text:
+            min_len = settings.get("caps_filter_min_length", 10)
+            threshold = settings.get("caps_filter_threshold", 0.7)
+            if len(text) >= min_len:
+                upper_count = sum(1 for c in text if c.isupper())
+                alpha_count = sum(1 for c in text if c.isalpha())
+                if alpha_count > 0 and upper_count / alpha_count >= threshold:
+                    await apply_protection_action(event, "delete", chat_db, settings, "caps_filter")
+                    return
+
+        # ── Фильтр повторов ─────────────────────────────────────────────────────
+        if settings.get("repeat_filter_enabled") and text:
+            r = await get_redis()
+            key = f"repeat:{event.chat.id}:{event.from_user.id}"
+            prev = await r.get(key)
+            await r.setex(key, 300, text[:200])
+            if prev and prev == text[:200]:
+                await apply_protection_action(event, "delete", chat_db, settings, "repeat_filter")
+                return
+
+        return await handler(event, data)

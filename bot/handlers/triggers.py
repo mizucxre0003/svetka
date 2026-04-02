@@ -4,13 +4,12 @@
 Триггеры кэшируются в Redis.
 """
 import json
-from aiogram import Router, F
-from aiogram.types import Message
+from aiogram import BaseMiddleware
+from aiogram.types import Message, TelegramObject
+from typing import Callable, Any, Awaitable
 from core.backend import backend
 from core.cache import get_redis, get_chat_settings_cached
 from loguru import logger
-
-router = Router()
 
 TRIGGER_CACHE_TTL = 120  # секунд
 
@@ -38,24 +37,36 @@ def match_trigger(trigger: dict, text: str) -> bool:
         return t in text_l
 
 
-@router.message(F.chat.type.in_({"group", "supergroup"}), F.text)
-async def trigger_handler(message: Message, chat_db: dict | None = None):
-    if not chat_db or not message.from_user or message.from_user.is_bot:
-        return
+class TriggersMiddleware(BaseMiddleware):
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: Message,
+        data: dict[str, Any],
+    ) -> Any:
+        if not isinstance(event, Message):
+            return await handler(event, data)
 
-    settings = await get_chat_settings_cached(chat_db["id"], backend)
-    if not settings or not settings.get("triggers_enabled"):
-        return
+        chat_db = data.get("chat_db")
+        if not chat_db or event.chat.type not in ("group", "supergroup") or not event.from_user or event.from_user.is_bot:
+            return await handler(event, data)
 
-    triggers = await get_triggers_cached(chat_db["id"])
-    text = message.text or ""
+        settings = await get_chat_settings_cached(chat_db["id"], backend)
+        if not settings or not settings.get("triggers_enabled"):
+            return await handler(event, data)
 
-    for trigger in triggers:
-        if not trigger.get("is_enabled"):
-            continue
-        if match_trigger(trigger, text):
-            try:
-                await message.reply(trigger["response_text"])
-            except Exception as e:
-                logger.warning(f"Trigger reply failed: {e}")
-            break
+        triggers = await get_triggers_cached(chat_db["id"])
+        text = event.text or ""
+
+        for trigger in triggers:
+            if not trigger.get("is_enabled"):
+                continue
+            if match_trigger(trigger, text):
+                try:
+                    await event.reply(trigger["response_text"])
+                except Exception as e:
+                    logger.warning(f"Trigger reply failed: {e}")
+                # Don't break, allow multiple triggers or just one? Usually just one
+                break
+                
+        return await handler(event, data)
