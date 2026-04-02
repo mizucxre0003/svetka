@@ -16,6 +16,7 @@ from core.cache import close_redis
 
 from middlewares.chat_context import ChatContextMiddleware
 from middlewares.anti_flood import AntiFloodMiddleware
+from middlewares.soft_mute import SoftMuteMiddleware
 
 from handlers import system, common, admin, triggers
 from filters.protection import router as protection_router
@@ -52,6 +53,7 @@ async def main():
 
     # Middlewares (порядок важен)
     dp.message.middleware(ChatContextMiddleware())
+    dp.message.middleware(SoftMuteMiddleware())
     dp.message.middleware(AntiFloodMiddleware())
 
     # Роутеры

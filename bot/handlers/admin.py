@@ -41,11 +41,11 @@ async def get_target(message: Message) -> tuple[int | None, str, str | None]:
     Получить цель команды.
     Возращает: (target_id, mention_html, error_message)
     """
-    if message.reply_to_message:
-        if message.reply_to_message.from_user:
-            u = message.reply_to_message.from_user
-            return u.id, u.mention_html(), None
-        elif message.reply_to_message.sender_chat:
+    reply = message.reply_to_message
+    if reply:
+        if reply.from_user:
+            return reply.from_user.id, reply.from_user.mention_html(), None
+        elif reply.sender_chat:
             return None, "", "❌ Невозможно применить к каналу или анонимной группе."
 
     if message.entities:
@@ -53,7 +53,7 @@ async def get_target(message: Message) -> tuple[int | None, str, str | None]:
             if ent.type == "text_mention" and ent.user:
                 return ent.user.id, ent.user.mention_html(), None
 
-    args = message.text.split() if message.text else []
+    args = (message.text or message.caption or "").split()
     if len(args) > 1:
         # Проверяем, не передан ли ID напрямую
         if args[1].isdigit():
@@ -84,7 +84,7 @@ async def cmd_ban(message: Message, chat_db: dict | None = None):
     except Exception:
         pass
 
-    args = message.text.split() if message.text else []
+    args = (message.text or message.caption or "").split()
     reason = " ".join(args[1:]) if len(args) > 1 else None
 
     try:
@@ -132,7 +132,7 @@ async def cmd_mute(message: Message, chat_db: dict | None = None):
         await message.reply(err or "❌ Цель не найдена.")
         return
 
-    args = message.text.split() if message.text else []
+    args = (message.text or message.caption or "").split()
     duration_str = args[1] if len(args) > 1 else None
     reason = " ".join(args[2:]) if len(args) > 2 else None
 
@@ -141,8 +141,10 @@ async def cmd_mute(message: Message, chat_db: dict | None = None):
         reason = " ".join(args[1:])
         duration = 3600  # default 1h
 
-    until = int(time.time()) + (duration or 3600)
+    final_duration = duration or 3600
+    until = int(time.time()) + final_duration
 
+    is_soft_mute = False
     try:
         await message.bot.restrict_chat_member(
             chat_id=message.chat.id,
@@ -151,8 +153,12 @@ async def cmd_mute(message: Message, chat_db: dict | None = None):
             until_date=until,
         )
     except Exception as e:
-        await message.reply(f"❌ Не удалось замутить: {e}")
-        return
+        err = str(e).lower()
+        if "participant_id_invalid" in err or "not_supergroup" in err or "can't restrict" in err or "chat_not_modified" in err or "not enough rights" in err:
+            is_soft_mute = True
+        else:
+            await message.reply(f"❌ Не удалось замутить: {e}")
+            return
 
     if chat_db:
         await backend.punish(
@@ -161,24 +167,51 @@ async def cmd_mute(message: Message, chat_db: dict | None = None):
             issued_by=message.from_user.id,
             ptype="mute",
             reason=reason,
-            duration=duration or 3600,
+            duration=final_duration,
         )
+        if is_soft_mute:
+            from core.cache import set_soft_mute
+            await set_soft_mute(chat_db["id"], target_id, final_duration)
+
         await backend.log_event(
             chat_id=chat_db["id"],
             action_type="mute",
             actor_tg_id=message.from_user.id,
             target_tg_id=target_id,
-            payload={"duration": duration, "reason": reason},
+            payload={"duration": final_duration, "reason": reason, "is_soft": is_soft_mute},
         )
         await backend.increment_metric(chat_db["id"], "mutes_count")
         await backend.increment_metric(chat_db["id"], "moderation_actions_count")
 
     duration_text = f" на {duration_str}" if duration_str else " на 1 час"
     reason_text = f"\n📝 Причина: {reason}" if reason else ""
-    await message.reply(
-        f"🔇 {mention} замучен{duration_text}.{reason_text}",
-        parse_mode="HTML",
-    )
+    
+    if is_soft_mute:
+        dur_text = duration_str if duration_str else "1 час"
+        await message.reply(
+            f"⚠️ В этой группе не поддерживается стандартный мут. Я буду автоматически удалять все сообщения пользователя {mention} следующие {dur_text}.{reason_text}",
+            parse_mode="HTML"
+        )
+    else:
+        await message.reply(
+            f"🔇 {mention} замучен{duration_text}.{reason_text}",
+            parse_mode="HTML",
+        )
+
+    # Schedule unmute message
+    import asyncio
+    async def schedule_unmute_notification():
+        await asyncio.sleep(final_duration)
+        try:
+            await message.bot.send_message(
+                message.chat.id, 
+                f"🔊 Время мута истекло. Пользователь {mention} размучен.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+    asyncio.create_task(schedule_unmute_notification())
+
     try:
         await message.delete()
     except Exception:
@@ -195,6 +228,7 @@ async def cmd_unmute(message: Message, chat_db: dict | None = None):
         await message.reply(err or "❌ Цель не найдена.")
         return
 
+    is_soft_unmute = False
     try:
         await message.bot.restrict_chat_member(
             chat_id=message.chat.id,
@@ -208,10 +242,17 @@ async def cmd_unmute(message: Message, chat_db: dict | None = None):
             },
         )
     except Exception as e:
-        await message.reply(f"❌ Не удалось снять мут: {e}")
-        return
+        err = str(e).lower()
+        if "participant_id_invalid" in err or "not_supergroup" in err or "can't restrict" in err or "chat_not_modified" in err or "not enough rights" in err:
+            is_soft_unmute = True
+        else:
+            await message.reply(f"❌ Не удалось снять мут: {e}")
+            return
 
     if chat_db:
+        from core.cache import clear_soft_mute
+        await clear_soft_mute(chat_db["id"], target_id)
+        
         await backend.log_event(
             chat_id=chat_db["id"],
             action_type="unmute",
@@ -220,7 +261,7 @@ async def cmd_unmute(message: Message, chat_db: dict | None = None):
         )
         await backend.increment_metric(chat_db["id"], "moderation_actions_count")
 
-    await message.reply(f"🔊 {mention} размучен.", parse_mode="HTML")
+    await message.reply(f"🔊 {mention} размучен администратором.", parse_mode="HTML")
     try:
         await message.delete()
     except Exception:
@@ -237,7 +278,7 @@ async def cmd_warn(message: Message, chat_db: dict | None = None):
         await message.reply(err or "❌ Цель не найдена.")
         return
 
-    args = message.text.split() if message.text else []
+    args = (message.text or message.caption or "").split()
     reason = " ".join(args[1:]) if len(args) > 1 else None
 
     if not chat_db:

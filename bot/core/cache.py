@@ -76,3 +76,25 @@ async def close_redis():
     if _redis:
         await _redis.aclose()
         _redis = None
+
+async def set_soft_mute(chat_id: int, user_id: int, ttl: int):
+    try:
+        r = await get_redis()
+        await r.setex(f"soft_mute:{chat_id}:{user_id}", ttl, "1")
+    except Exception as e:
+        from loguru import logger
+        logger.error(f"set_soft_mute error: {e}")
+
+async def clear_soft_mute(chat_id: int, user_id: int):
+    try:
+        r = await get_redis()
+        await r.delete(f"soft_mute:{chat_id}:{user_id}")
+    except Exception:
+        pass
+
+async def is_soft_muted(chat_id: int, user_id: int) -> bool:
+    try:
+        r = await get_redis()
+        return await r.exists(f"soft_mute:{chat_id}:{user_id}") > 0
+    except Exception:
+        return False
