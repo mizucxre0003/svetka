@@ -36,11 +36,11 @@
   --glass-blur-sm: blur(24px);
 
   /* Семантические */
-  --bg: var(--grey-950);
-  --surface: var(--grey-900);
-  --text: #dde2ee;
-  --text-2: #8890a4;
-  --text-3: #4a5068;
+  --bg: #0c0d0f;
+  --surface: #121418;
+  --text: #ffffff;
+  --text-2: #a6abbd;
+  --text-3: #6b7285;
   --green: #34d399;
   --green-dim: rgba(52,211,153,0.14);
   --red: #f87171;
@@ -85,17 +85,17 @@ body::before {
 
 /* ── GLASS CARD ───────────────────────────── */
 .glass {
-  background: var(--glass-bg);
+  background: rgba(255, 255, 255, 0.05);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   /* Эффект фаски 3D: верхняя/левая граница светлее, нижняя темнее */
-  border: 1px solid var(--glass-border);
-  border-top-color: var(--glass-border-strong);
-  border-left-color: var(--glass-border-strong);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top-color: rgba(255, 255, 255, 0.15);
+  border-left-color: rgba(255, 255, 255, 0.15);
   border-radius: var(--r);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
 }
 .glass::before {
   content: '';
@@ -153,34 +153,38 @@ body::before {
 .topbar-title { font-size: 16px; font-weight: 600; flex: 1; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
 .topbar-subtitle { font-size: 12px; color: var(--text-2); }
 
-/* ── BOTTOM NAV ───────────────────────────── */
+/* ── BOTTOM NAV (TELEGRAM PILL STYLE) ─────── */
 .bottom-nav {
   position: fixed;
-  bottom: 0;
-  left: 0; right: 0;
+  bottom: calc(16px + var(--safe-bottom));
+  left: 16px; 
+  right: 16px;
   z-index: 50;
-  padding: 8px 16px calc(8px + var(--safe-bottom));
-  background: rgba(12, 13, 15, 0.4);
-  backdrop-filter: blur(36px) saturate(140%);
-  -webkit-backdrop-filter: blur(36px) saturate(140%);
-  border-top: 1px solid var(--glass-border);
+  padding: 6px 8px;
+  background: rgba(25, 26, 32, 0.65);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top-color: rgba(255, 255, 255, 0.15);
+  border-radius: 30px;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 4px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
 }
 .nav-btn {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 6px 4px;
-  border-radius: var(--r-sm);
+  padding: 8px 4px;
+  border-radius: 20px;
   border: none; background: none; cursor: pointer;
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: 10px; font-family: inherit; font-weight: 500;
-  transition: all 0.15s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   text-decoration: none;
 }
-.nav-btn .nav-icon { font-size: 20px; line-height: 1; }
-.nav-btn:hover { color: var(--text-2); background: var(--glass-shine); }
-.nav-btn.active { color: var(--accent); }
+.nav-btn .nav-icon { font-size: 22px; line-height: 1; }
+.nav-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+.nav-btn.active { color: #ffffff; background: rgba(255,255,255,0.12); box-shadow: inset 0 1px 1px rgba(255,255,255,0.05); }
 
 /* ── SECTION ──────────────────────────────── */
 .section { margin-bottom: 20px; }
@@ -287,19 +291,24 @@ body::before {
 
 /* ── INPUT / TEXTAREA ─────────────────────── */
 .field-wrap { margin-bottom: 16px; }
-.field-label { display: block; font-size: 12px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; letter-spacing: 0.2px; }
+.field-label { display: block; font-size: 13px; font-weight: 600; color: #b0b5c5; margin-bottom: 8px; letter-spacing: 0.3px; }
 .field {
   width: 100%;
-  background: var(--glass-bg-light);
-  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.08); /* Светлее для читаемости */
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: var(--r-sm);
-  color: var(--text);
-  padding: 11px 14px;
-  font-size: 14px; font-family: inherit;
+  color: #ffffff;
+  padding: 14px 16px;
+  font-size: 15px; font-family: inherit;
   outline: none;
-  transition: border-color 0.15s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
 }
-.field:focus { border-color: var(--accent); }
+.field:focus { 
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2), 0 0 12px rgba(255,255,255,0.1);
+}
 .field::placeholder { color: var(--text-3); }
 textarea.field { resize: vertical; min-height: 80px; }
 
