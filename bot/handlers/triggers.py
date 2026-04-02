@@ -15,13 +15,24 @@ TRIGGER_CACHE_TTL = 120  # секунд
 
 
 async def get_triggers_cached(chat_id: int) -> list[dict]:
-    r = await get_redis()
     key = f"triggers:{chat_id}"
-    cached = await r.get(key)
-    if cached:
-        return json.loads(cached)
+    try:
+        r = await get_redis()
+        cached = await r.get(key)
+        if cached:
+            return json.loads(cached)
+    except Exception as e:
+        logger.warning(f"Redis error getting triggers: {e}")
+        r = None
+
     data = await backend.get_triggers(chat_id)
-    await r.setex(key, TRIGGER_CACHE_TTL, json.dumps(data))
+    
+    if r:
+        try:
+            await r.setex(key, TRIGGER_CACHE_TTL, json.dumps(data))
+        except Exception:
+            pass
+            
     return data
 
 
