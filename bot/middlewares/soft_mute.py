@@ -22,14 +22,16 @@ class SoftMuteMiddleware(BaseMiddleware):
         if not user:
             return await handler(event, data)
 
-        # Проверяем, есть ли пользователь в списке софт-мута (Redis)
+        # Проверяем, есть ли пользователь в списке софт-мута
         chat_db = data.get("chat_db")
         if chat_db and await is_soft_muted(chat_db["id"], user.id):
             try:
                 await event.delete()
-            except Exception as e:
-                # Если не удалось удалить (например, бот потерял права)
-                pass
+            except Exception:
+                # Если не удалось удалить, возможно нет прав администратора
+                # Чтобы не спамить, можно было бы сделать флаг, но для MVP просто игнорируем ошибку
+                # или пишем лог
+                logger.error(f"Cannot delete message in chat {chat.id}. Missing permissions?")
             return  # Прерываем обработку сообщения
 
         return await handler(event, data)

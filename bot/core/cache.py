@@ -77,15 +77,21 @@ async def close_redis():
         await _redis.aclose()
         _redis = None
 
+import time
+
+_soft_mute_mem = {}
+
 async def set_soft_mute(chat_id: int, user_id: int, ttl: int):
+    # Fallback in-memory dict
+    _soft_mute_mem[f"{chat_id}:{user_id}"] = time.time() + ttl
     try:
         r = await get_redis()
         await r.setex(f"soft_mute:{chat_id}:{user_id}", ttl, "1")
     except Exception as e:
-        from loguru import logger
-        logger.error(f"set_soft_mute error: {e}")
+        pass
 
 async def clear_soft_mute(chat_id: int, user_id: int):
+    _soft_mute_mem.pop(f"{chat_id}:{user_id}", None)
     try:
         r = await get_redis()
         await r.delete(f"soft_mute:{chat_id}:{user_id}")
@@ -93,6 +99,13 @@ async def clear_soft_mute(chat_id: int, user_id: int):
         pass
 
 async def is_soft_muted(chat_id: int, user_id: int) -> bool:
+    key = f"{chat_id}:{user_id}"
+    if key in _soft_mute_mem:
+        if time.time() < _soft_mute_mem[key]:
+            return True
+        else:
+            _soft_mute_mem.pop(key, None)
+            
     try:
         r = await get_redis()
         return await r.exists(f"soft_mute:{chat_id}:{user_id}") > 0

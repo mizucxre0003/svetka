@@ -31,11 +31,6 @@ async def set_bot_commands(bot: Bot):
         BotCommand(command="rules", description="Правила группы"),
         BotCommand(command="stats", description="Статистика"),
         BotCommand(command="settings", description="Настройки"),
-        BotCommand(command="ban", description="Забанить (reply)"),
-        BotCommand(command="mute", description="Замутить (reply) [время]"),
-        BotCommand(command="unmute", description="Снять мут (reply)"),
-        BotCommand(command="warn", description="Предупреждение (reply)"),
-        BotCommand(command="unwarn", description="Снять варн (reply)"),
     ]
     await bot.set_my_commands(commands)
 

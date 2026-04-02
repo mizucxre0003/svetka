@@ -15,10 +15,13 @@ router = Router()
 
 
 def parse_duration(text: str | None) -> int | None:
-    """Парсит '1h', '30m', '1d' в секунды. None = permanent."""
+    """Парсит '1h', '30m', '1d', '5 min' в секунды. None = permanent."""
     if not text:
         return None
-    match = re.match(r"^(\d+)([smhd])$", text.lower())
+    text = text.lower().replace(" ", "")
+    # Убираем лишние буквы чтобы 5min стало 5m
+    text = text.replace("min", "m").replace("sec", "s").replace("hour", "h").replace("day", "d")
+    match = re.match(r"^(\d+)([smhd])$", text)
     if not match:
         return None
     val, unit = int(match.group(1)), match.group(2)
@@ -140,8 +143,16 @@ async def cmd_mute(message: Message, chat_db: dict | None = None):
     if len(args) > 1 and args[1].lstrip('-').isdigit() and len(args[1]) > 5:
         offset = 2
 
-    duration_str = args[offset] if len(args) > offset else None
-    reason = " ".join(args[offset+1:]) if len(args) > offset + 1 else None
+    # Собираем все аргументы времени. Если кто-то написал "5 min", то они разделены пробелом.
+    duration_str = None
+    reason = None
+    if len(args) > offset:
+        if len(args) > offset + 1 and args[offset].isdigit() and args[offset+1].lower() in ["m", "min", "h", "hour", "hours", "d", "day", "days"]:
+            duration_str = args[offset] + args[offset+1]
+            reason = " ".join(args[offset+2:]) if len(args) > offset + 2 else None
+        else:
+            duration_str = args[offset]
+            reason = " ".join(args[offset+1:]) if len(args) > offset + 1 else None
 
     duration = parse_duration(duration_str)
     if duration_str and not duration:
