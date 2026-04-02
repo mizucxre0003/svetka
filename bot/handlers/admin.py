@@ -47,6 +47,8 @@ async def get_target(message: Message) -> tuple[int | None, str, str | None]:
             return reply.from_user.id, reply.from_user.mention_html(), None
         elif reply.sender_chat:
             return None, "", "❌ Невозможно применить к каналу или анонимной группе."
+        else:
+            return None, "", "❌ Это сообщение недоступно для бота (возможно оно было отправлено до выдачи прав). Ответьте на более свежее сообщение."
 
     if message.entities:
         for ent in message.entities:
@@ -55,12 +57,11 @@ async def get_target(message: Message) -> tuple[int | None, str, str | None]:
 
     args = (message.text or message.caption or "").split()
     if len(args) > 1:
-        # Проверяем, не передан ли ID напрямую
-        if args[1].isdigit():
+        # Проверяем, не передан ли ID напрямую (ID обычно длинные)
+        if args[1].lstrip('-').isdigit() and len(args[1]) > 5:
             return int(args[1]), f'<a href="tg://user?id={args[1]}">Пользователь</a>', None
-        # Если это @username
         elif args[1].startswith("@"):
-            return None, "", "❌ Бот не может мутить по @username без ответа на сообщение. Пожалуйста, ответьте на сообщение (Reply) пользователя, либо укажите его цифровой ID."
+            return None, "", "❌ Бот не может применять команды к @username без ответа на сообщение. Пожалуйста, ответьте на сообщение (Reply) пользователя."
 
     return None, "", "❌ Ответьте на сообщение пользователя или укажите его ID."
 
@@ -133,12 +134,18 @@ async def cmd_mute(message: Message, chat_db: dict | None = None):
         return
 
     args = (message.text or message.caption or "").split()
-    duration_str = args[1] if len(args) > 1 else None
-    reason = " ".join(args[2:]) if len(args) > 2 else None
+    
+    # Сдвигаем индексы, если первым аргументом был ID пользователя
+    offset = 1
+    if len(args) > 1 and args[1].lstrip('-').isdigit() and len(args[1]) > 5:
+        offset = 2
+
+    duration_str = args[offset] if len(args) > offset else None
+    reason = " ".join(args[offset+1:]) if len(args) > offset + 1 else None
 
     duration = parse_duration(duration_str)
     if duration_str and not duration:
-        reason = " ".join(args[1:])
+        reason = " ".join(args[offset:])
         duration = 3600  # default 1h
 
     final_duration = duration or 3600
